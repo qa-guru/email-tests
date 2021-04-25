@@ -11,8 +11,11 @@ def junitVersion = "5.7.1"
 
 dependencies {
     testImplementation(
-//            "com.sun.mail:javax.mail:1.6.2",
-            "javax.mail:javax.mail-api.mail:1.6.2",
+            "com.sun.mail:javax.mail:1.6.2",
+//            "javax.mail:javax.mail-api.mail:1.6.2",
+            "com.github.javafaker:javafaker:1.0.2",
+            "ch.qos.logback:logback-classic:1.2.3",
+            "org.jsoup:jsoup:1.13.1",
             "org.junit.jupiter:junit-jupiter-api:$junitVersion")
     testRuntimeOnly "org.junit.jupiter:junit-jupiter-engine:$junitVersion"
 }

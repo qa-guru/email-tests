@@ -1,6 +1,6 @@
 package utils;
 
-import io.qameta.allure.Step;
+import org.jsoup.Jsoup;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -12,46 +12,35 @@ import java.io.IOException;
 import java.util.*;
 import java.util.stream.Collectors;
 
-import static com.codeborne.selenide.Selenide.sleep;
+import static java.lang.Thread.sleep;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class EmailUtils {
-
     private static Logger logger = LoggerFactory.getLogger(EmailUtils.class);
 
-    static String inboxHost = "pop.gmail.com";
+    static String inboxHost = "imap.gmail.com";
     static String outboxHost = "smtp.gmail.com";
 
-    @Step("Проверка, что сообщение дошло")
-    public void verifyMailHasMessage(String user, String password, String text) {
-        List<Message> messages = waitForMail(user, password, text, 10);
-
-        logger.info("Message found: " + messages.size());
-        assertEquals(messages.size(), 1, "Проверка, что найдено одно сообщение с данным текстом в течение 10 минут");
-    }
-
-    public static List<Message> waitForMail(String user, String password, String text, int minutes) {
-        for (int i = 0; i < minutes; i ++) {
+    public static List<String> waitForMail(String user, String password, String text, int minutes) {
+        for (int i = 0; i < minutes; i++) {
             logger.info("waitForMail i: " + i);
-            List<Message> messages = getMail(user, password, text);
-            if(messages.size() > 0) {
+            List<String> messages = getMail(user, password, text);
+            if (messages.size() > 0) {
                 return messages;
             }
-            sleep(60000);
+            sleepMail(20000);
         }
         return new ArrayList<>();
     }
 
-    public static List<Message> getMail(String user, String password, String text)
-    {
+    public static List<String> getMail(String user, String password, String expectedText) {
         try {
             Properties properties = new Properties();
-            properties.put("mail.pop3.host", inboxHost);
-            properties.put("mail.pop3.port", "995");
-            properties.put("mail.pop3.starttls.enable", "true");
+            properties.put("mail.store.protocol", "imaps");
+
             Session emailSession = Session.getDefaultInstance(properties);
 
-            Store store = emailSession.getStore("pop3s");
+            Store store = emailSession.getStore("imaps");
             store.connect(inboxHost, user, password);
 
             //create the folder object and open it
@@ -60,17 +49,19 @@ public class EmailUtils {
 
             // retrieve the messages from the folder in an array and print it
             Message[] messages = emailFolder.getMessages();
-            List<Message> messagesList = Arrays.asList(messages);
-            logger.info("Messages.length: " + messagesList.size());
 
-            List<Message> filteredMessagesList = messagesList.stream().filter(message -> {
-                return getTextFromMessage(message).contains(text);
-            }).collect(Collectors.toList());
+            List<String> messagesList = new ArrayList<>();
+            for(Message message: messages) {
+                String messageText = getTextFromMessage(message);
+                if(messageText.contains(expectedText))
+                    messagesList.add(messageText);
+            }
+
 
             emailFolder.close(false);
             store.close();
 
-            return filteredMessagesList;
+            return messagesList;
 
         } catch (NoSuchProviderException e) {
             e.printStackTrace();
@@ -81,10 +72,10 @@ public class EmailUtils {
             logger.info("getMail Exception error:\n" + e);
             e.printStackTrace();
         }
-        return new ArrayList<>();
+        return null;
     }
 
-    private static String getTextFromMessage(Message message) {
+    public static String getTextFromMessage(Message message) {
         String result = "";
 
         try {
@@ -109,7 +100,7 @@ public class EmailUtils {
     }
 
     private static String getTextFromMimeMultipart(
-            MimeMultipart mimeMultipart)  throws MessagingException, IOException{
+            MimeMultipart mimeMultipart) throws MessagingException, IOException {
         String result = "";
         int count = mimeMultipart.getCount();
         for (int i = 0; i < count; i++) {
@@ -119,18 +110,17 @@ public class EmailUtils {
                 break;
             } else if (bodyPart.isMimeType("text/html")) {
                 String html = (String) bodyPart.getContent();
-                result = result + "\n" + org.jsoup.Jsoup.parse(html).text();
-            } else if (bodyPart.getContent() instanceof MimeMultipart){
-                result = result + getTextFromMimeMultipart((MimeMultipart)bodyPart.getContent());
+                result = result + "\n" + Jsoup.parse(html).text();
+            } else if (bodyPart.getContent() instanceof MimeMultipart) {
+                result = result + getTextFromMimeMultipart((MimeMultipart) bodyPart.getContent());
             }
         }
         return result;
     }
 
-
     public static void sendMailWithoutAuth(String from, String to, String subject, String text) {
         Properties props = new Properties();
-        props.put("mail.smtp.host", "localhost");
+        props.put("mail.smtp.host", "smtp.gmail.com");
 
         Session session = Session.getDefaultInstance(props);
         try {
@@ -151,7 +141,6 @@ public class EmailUtils {
         }
     }
 
-    @Step("Отправление письма")
     public static void sendMail(String user, String password, String to, String subject, String text) {
         Properties props = new Properties();
         props.put("mail.smtp.auth", "true");
@@ -187,7 +176,20 @@ public class EmailUtils {
             throw new RuntimeException(e);
         }
 
-
     }
 
+    private static void sleepMail(int i) {
+        try {
+            sleep(i);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public void verifyMailHasMessage(String user, String password, String text) {
+        List<String> messages = waitForMail(user, password, text, 10);
+
+        logger.info("Message found: " + messages.size());
+        assertEquals(messages.size(), 1, "Проверка, что найдено одно сообщение с данным текстом в течение 10 минут");
+    }
 }
